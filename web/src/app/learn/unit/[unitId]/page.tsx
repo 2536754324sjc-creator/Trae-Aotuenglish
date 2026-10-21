@@ -1,10 +1,10 @@
 'use client';
 
-import { use, useCallback, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { IconSprite } from '@/components/icon-sprite';
-import { getUnit } from '@/lib/mock-data';
+import { fetchUnit, postSession } from '@/lib/api-client';
 import type { Unit } from '@/lib/types';
 import { useAnswerMachine } from '@/features/learn/use-answer-machine';
 import { PictureChoice } from '@/features/learn/picture-choice';
@@ -19,14 +19,38 @@ type Params = Promise<{ unitId: string }>;
 
 export default function UnitPage({ params }: { params: Params }) {
   const { unitId } = use(params);
-  const unit = getUnit(unitId);
+  const [unit, setUnit] = useState<Unit | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchUnit(unitId)
+      .then(({ unit: data }) => {
+        if (!cancelled) setUnit(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : '这一关加载失败');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [unitId]);
+
+  if (error) {
+    return (
+      <div className={styles.missing}>
+        <IconSprite />
+        <p>{error}</p>
+        <Link href="/learn">回到学习地图</Link>
+      </div>
+    );
+  }
 
   if (!unit) {
     return (
       <div className={styles.missing}>
         <IconSprite />
-        <p>找不到这一关</p>
-        <Link href="/learn">回到学习地图</Link>
+        <p>正在加载这一关…</p>
       </div>
     );
   }
@@ -37,17 +61,36 @@ export default function UnitPage({ params }: { params: Params }) {
 function UnitRunner({ unit }: { unit: Unit }) {
   const router = useRouter();
   const [quitOpen, setQuitOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const startedAt = useRef(Date.now());
+  const submitted = useRef(false);
   const machine = useAnswerMachine(unit);
 
-  const goDone = useCallback(() => {
-    router.push(`/learn/unit/${unit.unitId}/done?stars=${machine.stars}`);
-  }, [machine.stars, router, unit.unitId]);
+  /** 答完先上报，再带着后端算出的星星进结算；上报失败也不阻塞孩子 */
+  const goDone = useCallback(async () => {
+    if (submitted.current) return;
+    submitted.current = true;
+    setSubmitting(true);
+
+    let stars = machine.stars;
+    try {
+      const result = await postSession({
+        unitId: unit.unitId,
+        results: machine.state.results,
+        durationSec: Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)),
+      });
+      stars = result.stars;
+    } catch (err) {
+      console.error('[learn] 练习结果上报失败，使用本地星星数', err);
+    }
+
+    router.push(`/learn/unit/${unit.unitId}/done?stars=${stars}`);
+  }, [machine.stars, machine.state.results, router, unit.unitId]);
 
   // 答完全部题后自动进结算，给孩子明确的「完成」感
   useEffect(() => {
     if (!machine.state.finished) return;
-    const id = window.setTimeout(goDone, 700);
-    return () => window.clearTimeout(id);
+    void goDone();
   }, [machine.state.finished, goDone]);
 
   const q = machine.question;
@@ -141,13 +184,13 @@ function UnitRunner({ unit }: { unit: Unit }) {
       </main>
 
       <footer className={styles.footer}>
-        {machine.state.phase === 'correct' ? (
-          <button
-            type="button"
-            className={styles.primary}
-            onClick={machine.state.finished ? goDone : machine.next}
-          >
-            {machine.state.finished ? '完成' : t.common.next}
+        {machine.state.finished || submitting ? (
+          <button type="button" className={styles.primary} disabled>
+            {submitting ? '正在保存…' : '完成'}
+          </button>
+        ) : machine.state.phase === 'correct' ? (
+          <button type="button" className={styles.primary} onClick={machine.next}>
+            {t.common.next}
           </button>
         ) : (
           <button

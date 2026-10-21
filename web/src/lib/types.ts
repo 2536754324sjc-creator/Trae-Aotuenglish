@@ -79,3 +79,30 @@ export type ReportRow = {
   accuracy: number;
   minutes: number;
 };
+
+/** GET /api/courses/:slug */
+export type CourseDetail = {
+  course: Course;
+  units: Unit[];
+};
+
+/** GET /api/reports/weekly */
+export type WeeklyReportResponse = {
+  week: string;
+  report: WeeklyReport;
+  rows: ReportRow[];
+};
+
+/** POST /api/users/me/sessions 的入参与返回 */
+export type SessionInput = {
+  unitId: string;
+  results: boolean[];
+  durationSec: number;
+};
+
+export type SessionResult = {
+  stars: number;
+  firstTryCount: number;
+  total: number;
+  progress: TodayProgress;
+};

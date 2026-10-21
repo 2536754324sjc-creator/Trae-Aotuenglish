@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { IconSprite } from '@/components/icon-sprite';
-import { getUnit } from '@/lib/mock-data';
+import { fetchUnit } from '@/lib/api-client';
 import styles from './done.module.css';
 
 type Params = Promise<{ unitId: string }>;
@@ -12,7 +12,21 @@ export default function DonePage({ params }: { params: Params }) {
   const { unitId } = use(params);
   const router = useRouter();
   const search = useSearchParams();
-  const unit = getUnit(unitId);
+  const [title, setTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchUnit(unitId)
+      .then(({ unit }) => {
+        if (!cancelled) setTitle(unit.titleZh);
+      })
+      .catch(() => {
+        // 结算页标题只是锦上添花，单元名取不到也不阻塞
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [unitId]);
 
   const starsParam = Number(search.get('stars'));
   const stars = Number.isFinite(starsParam) ? Math.min(3, Math.max(1, starsParam)) : 1;
@@ -35,7 +49,7 @@ export default function DonePage({ params }: { params: Params }) {
 
       <main className={styles.card}>
         <p className={styles.eyebrow}>这一关完成了</p>
-        <h1 className={styles.title}>{unit ? unit.titleZh : '本关'}</h1>
+        <h1 className={styles.title}>{title ?? '本关'}</h1>
 
         <div className={styles.stars} aria-label={`获得 ${stars} 颗星`}>
           {[0, 1, 2].map((i) => (

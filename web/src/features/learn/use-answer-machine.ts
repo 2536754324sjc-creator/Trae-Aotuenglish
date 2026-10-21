@@ -96,7 +96,7 @@ function reducer(unit: Unit) {
       case 'next': {
         const isLast = state.index >= unit.questions.length - 1;
         if (isLast) {
-          return { ...state, finished: true, phase: 'asking' };
+          return { ...state, finished: true, phase: 'asking', selected: null };
         }
         return {
           ...state,

@@ -2,12 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LearnMap } from '@/components/learn-map/learn-map';
 import { IconSprite } from '@/components/icon-sprite';
-import { mockTodayProgress, mockCourses } from '@/lib/mock-data';
+import { getProgress, listCourses } from '@/lib/server/courses';
 import { levels } from '@/design/tokens';
 import { getDict } from '@/i18n';
 import styles from './home.module.css';
 
 const t = getDict('zh');
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'AotuEnglish · 每天 15 分钟，真的开口',
@@ -15,8 +17,8 @@ export const metadata: Metadata = {
     '一张看得见进度的英语学习地图。4 岁到成人，按内容分层闯关，家长看得见每周进步。',
 };
 
-export default function HomePage() {
-  const progress = mockTodayProgress;
+export default async function HomePage() {
+  const [progress, courses] = await Promise.all([getProgress(), listCourses()]);
 
   return (
     <>
@@ -111,7 +113,7 @@ export default function HomePage() {
         <section className={styles.courses}>
           <h2>内容体系</h2>
           <div className={styles.courseGrid}>
-            {mockCourses.map((c) => (
+            {courses.map((c) => (
               <Link key={c.slug} href={`/courses/${c.slug}`} className={styles.courseCard}>
                 <span className={styles.courseTag}>{levels[c.level].label}</span>
                 <strong>{c.titleZh}</strong>
